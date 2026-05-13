@@ -1,0 +1,29 @@
+{
+  "name": "JLPT / TOEIC 错题本",
+  "short_name": "错题本",
+  "description": "JLPT 和 TOEIC 错题复习、生词发音与标签筛选工具",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#f7f2ea",
+  "background_color": "#f7f2ea",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
