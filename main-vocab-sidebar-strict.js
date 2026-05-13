@@ -1,41 +1,57 @@
-const stylesheetHref = '/styles-vocab-sidebar.css';
-if (!document.querySelector(`link[href="${stylesheetHref}"]`)) {
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
-  link.href = stylesheetHref;
-  document.head.appendChild(link);
+import './main-vocab-sidebar.js';
+
+const statusLabels = {
+  unmastered: '未掌握',
+  uncertain: '模糊',
+  mastered: '已掌握',
+  all: ''
+};
+
+function activeValue(selector, key) {
+  const el = document.querySelector(`${selector}.active`);
+  return el?.dataset?.[key] || '';
 }
 
-(async () => {
-  const response = await fetch(`/main-vocab-sidebar.js?v=strict-${Date.now()}`, { cache: 'no-store' });
-  let source = await response.text();
+function applyFilterFix() {
+  const resultList = document.querySelector('.result-list');
+  const isFilterPage = document.querySelector('[data-filter-level]') && document.querySelector('.filter-result-copy');
+  if (!resultList || !isFilterPage) return;
 
-  source = source
-    .replace(/^import ['"]\.\/styles-vocab-sidebar\.css['"];\s*/m, '')
-    .replaceAll("from './mockData.js'", "from '/mockData.js'")
-    .replaceAll("from './speech.js'", "from '/speech.js'")
-    .replaceAll("from './api.js'", "from '/api.js'");
+  const exam = activeValue('[data-filter-exam]', 'filterExam');
+  const level = activeValue('[data-filter-level]', 'filterLevel');
+  const status = activeValue('[data-filter-status]', 'filterStatus');
+  const statusLabel = statusLabels[status] || '';
+  let count = 0;
 
-  source = source.replace(
-    /const fallbackFiltered = baseFiltered\.length \? baseFiltered : state\.questions\.filter\(q => q\.exam_category === state\.filters\.exam\);\s*const finalFiltered = keyword \? fallbackFiltered\.filter\(q => questionMatchesKeyword\(q, keyword\)\) : fallbackFiltered;/,
-    'const finalFiltered = keyword ? baseFiltered.filter(q => questionMatchesKeyword(q, keyword)) : baseFiltered;'
-  );
+  resultList.querySelectorAll('.result-card').forEach(card => {
+    const tags = Array.from(card.querySelectorAll('.meta-tags .tag')).map(tag => tag.textContent.trim());
+    const ok = (!exam || tags.includes(exam)) && (!level || tags.includes(level)) && (!statusLabel || tags.includes(statusLabel));
+    card.style.display = ok ? '' : 'none';
+    if (ok) count += 1;
+  });
 
-  source = source.replace(
-    'if (data?.length) state.questions = data.map(normalizeQuestion);',
-    'if (Array.isArray(data)) state.questions = data.map(normalizeQuestion);'
-  );
-
-  if (source.includes('fallbackFiltered')) {
-    console.warn('Strict filter patch did not remove fallbackFiltered.');
+  let empty = resultList.querySelector('.strict-filter-empty');
+  if (count === 0) {
+    if (!empty) {
+      empty = document.createElement('div');
+      empty.className = 'empty-note strict-filter-empty';
+      resultList.appendChild(empty);
+    }
+    empty.textContent = '没有找到符合当前等级 / Part 的错题。';
+  } else if (empty) {
+    empty.remove();
   }
 
-  const blobUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
-  await import(blobUrl);
-})().catch((error) => {
-  console.error(error);
-  const app = document.getElementById('app');
-  if (app) {
-    app.innerHTML = '<main class="app"><section class="panel hero"><h1>页面加载失败</h1><p>请刷新页面，或检查 main-vocab-sidebar-strict.js。</p></section></main>';
-  }
-});
+  const copy = document.querySelector('.filter-result-copy');
+  if (copy) copy.textContent = `列表里只预览四个普通选项，不显示对错。当前显示 ${count} 条结果。`;
+}
+
+function scheduleFilterFix() {
+  requestAnimationFrame(applyFilterFix);
+}
+
+window.addEventListener('click', scheduleFilterFix, true);
+window.addEventListener('input', scheduleFilterFix, true);
+window.addEventListener('load', scheduleFilterFix);
+setInterval(applyFilterFix, 400);
+scheduleFilterFix();
