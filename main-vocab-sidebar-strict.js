@@ -163,10 +163,19 @@ function installToolStyles() {
   document.head.appendChild(style);
 }
 
+function addMissingAnswerChoice() {
+  const answerSelect = document.querySelector('select[name="my_label"]');
+  if (!answerSelect) return;
+  if (Array.from(answerSelect.options).some(option => option.value === 'B')) return;
+  const cOption = Array.from(answerSelect.options).find(option => option.value === 'C');
+  answerSelect.add(new Option('B', 'B'), cOption || undefined);
+}
+
 function runEnhancements() {
   installToolStyles();
   applyFilterFix();
   applyQuestionListTools();
+  addMissingAnswerChoice();
 }
 
 function scheduleEnhancements() {
