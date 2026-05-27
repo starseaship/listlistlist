@@ -12,6 +12,8 @@ let state = {
   questions: [...mockQuestions],
   vocabulary: [...mockVocabulary],
   vocabListCollapsed: false,
+  vocabPage: 1,
+  vocabDetailDrawerOpen: false,
   filters: {
     exam: 'JLPT',
     skill: '语法 / 文法',
@@ -331,6 +333,7 @@ function renderQuestionDetail() {
 
 function renderVocab() {
   const { exam, status, query } = state.vocabFilters;
+  const pageSize = 10;
   const q = query.trim().toLowerCase();
   let list = state.vocabulary.filter(item => {
     const examOk = exam === 'all' || item.exam_category === exam;
@@ -338,8 +341,13 @@ function renderVocab() {
     const searchOk = !q || [item.word, item.reading, item.meaning_zh, item.meaning_en, item.example_sentence, item.note].join(' ').toLowerCase().includes(q);
     return examOk && statusOk && searchOk;
   });
+  const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+  if (state.vocabPage > totalPages) state.vocabPage = totalPages;
+  if (state.vocabPage < 1) state.vocabPage = 1;
+  const page = state.vocabPage;
+  const pagedList = list.slice((page - 1) * pageSize, page * pageSize);
   if (!list.some(v => v.id === state.selectedVocabId) && list[0]) state.selectedVocabId = list[0].id;
-  const selected = state.vocabulary.find(v => v.id === state.selectedVocabId) || list[0];
+  const selected = list.find(v => v.id === state.selectedVocabId) || list[0];
   const sidebarCollapsed = state.vocabListCollapsed;
   const sidebarContent = sidebarCollapsed ? `
     <div class="vocab-collapsed-rail">
@@ -355,7 +363,12 @@ function renderVocab() {
     <div class="search-box"><span>🔎</span><input id="vocabSearch" value="${escapeHtml(query)}" placeholder="搜索单词 / 中文 / 英文解释"></div>
     <div class="filter-row">${['all','JLPT','TOEIC'].map(x => `<button class="chip ${exam === x ? 'active' : ''}" data-vocab-exam="${x}">${x === 'all' ? '全部' : x}</button>`).join('')}</div>
     <div class="filter-row">${['all','unmastered','uncertain','mastered'].map(x => `<button class="chip ${status === x ? 'active' : ''}" data-vocab-status="${x}">${statusMeta[x]?.[0] || x}</button>`).join('')}</div>
-    <div class="vocab-list">${list.map(vocabCard).join('') || '<div class="empty-note">没有找到符合条件的生词。</div>'}</div>
+    <div class="vocab-page-summary">第 ${page} / ${totalPages} 页｜共 ${list.length} 个单词</div>
+    <div class="vocab-list">${pagedList.map(vocabCard).join('') || '<div class="empty-note">没有找到符合条件的生词。</div>'}</div>
+    <div class="vocab-pagination">
+      <button class="btn soft" data-vocab-page="prev" ${page <= 1 ? 'disabled' : ''}>上一页</button>
+      <button class="btn soft" data-vocab-page="next" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
+    </div>
   `;
 
   return appShell(`
@@ -364,13 +377,22 @@ function renderVocab() {
       <section class="panel vocab-sidebar">${sidebarContent}</section>
       <section class="panel vocab-detail-panel">${selected ? vocabDetail(selected) : '<div class="empty-note">从左边点一个单词，这里会显示详细信息。</div>'}</section>
     </section>
+    ${selected && state.vocabDetailDrawerOpen ? `
+      <div class="vocab-drawer-backdrop" data-close-vocab-drawer></div>
+      <aside class="vocab-detail-drawer" role="dialog" aria-modal="true" aria-label="生词详情">
+        <div class="vocab-drawer-handle">
+          <button class="btn soft" data-close-vocab-drawer>关闭</button>
+        </div>
+        <div class="vocab-drawer-content">${vocabDetail(selected)}</div>
+      </aside>
+    ` : ''}
   `);
 }
 
 function vocabCard(v) {
   const [label, cls] = statusMeta[v.status] || statusMeta.unmastered;
   return `
-    <article class="vocab-card ${v.id === state.selectedVocabId ? 'active' : ''}" data-vocab-id="${v.id}">
+    <article class="vocab-card ${v.id === state.selectedVocabId ? 'active' : ''}">
       <div class="meta-tags"><span class="tag">${v.exam_category}</span><span class="tag ${cls}">${label}</span><span class="tag lavender">${escapeHtml(v.part_of_speech || '')}</span></div>
       <div class="word-row"><div><div class="word">${escapeHtml(v.word)}</div><div class="reading">${escapeHtml(v.reading || '')}</div></div></div>
       <div class="meaning-zh">${escapeHtml(v.meaning_zh || '')}</div><div class="meaning-en">${escapeHtml(v.meaning_en || '')}</div>
@@ -403,7 +425,7 @@ function renderAdd() {
         <div class="form-field full-span"><label>题目</label><textarea class="textarea" name="question_text" placeholder="输入题目文本"></textarea></div>
         ${['A','B','C','D'].map(x => `<div class="form-field"><label>选项 ${x}</label><input class="input" name="option_${x}" placeholder="${x}. 选项内容"></div>`).join('')}
         <div class="form-field"><label>正确答案</label><select class="select" name="correct_label"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
-        <div class="form-field"><label>我的答案</label><select class="select" name="my_label"><option value="">未填写</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+        <div class="form-field"><label>我的答案</label><select class="select" name="my_label"><option value="">未填写</option><option>A</option><option>C</option><option>D</option></select></div>
         <div class="form-field full-span"><label>解析</label><textarea class="textarea" name="ai_explanation" placeholder="AI 解析或自己的错因记录"></textarea></div>
         <div class="form-field full-span"><label>错因标签</label><input class="input" name="error_reason_tags" placeholder="用逗号分隔，例如 词义辨析, 接续判断"></div>
         <div class="form-field full-span"><button class="btn full" type="submit">保存错题</button></div>
@@ -488,13 +510,36 @@ function attachEvents() {
     render();
   }));
 
-  document.querySelectorAll('[data-vocab-exam]').forEach(btn => btn.addEventListener('click', () => { state.vocabFilters.exam = btn.dataset.vocabExam; render(); }));
-  document.querySelectorAll('[data-vocab-status]').forEach(btn => btn.addEventListener('click', () => { state.vocabFilters.status = btn.dataset.vocabStatus; render(); }));
+  document.querySelectorAll('[data-vocab-exam]').forEach(btn => btn.addEventListener('click', () => {
+    state.vocabFilters.exam = btn.dataset.vocabExam;
+    state.vocabPage = 1;
+    state.vocabDetailDrawerOpen = false;
+    render();
+  }));
+  document.querySelectorAll('[data-vocab-status]').forEach(btn => btn.addEventListener('click', () => {
+    state.vocabFilters.status = btn.dataset.vocabStatus;
+    state.vocabPage = 1;
+    state.vocabDetailDrawerOpen = false;
+    render();
+  }));
   const vocabSearch = document.getElementById('vocabSearch');
-  if (vocabSearch) vocabSearch.addEventListener('input', e => { state.vocabFilters.query = e.target.value; render(); });
-  document.querySelectorAll('[data-vocab-id], [data-select-vocab]').forEach(el => el.addEventListener('click', () => {
-    const id = el.dataset.vocabId || el.dataset.selectVocab;
-    state.selectedVocabId = id;
+  if (vocabSearch) vocabSearch.addEventListener('input', e => {
+    state.vocabFilters.query = e.target.value;
+    state.vocabPage = 1;
+    state.vocabDetailDrawerOpen = false;
+    render();
+  });
+  document.querySelectorAll('[data-vocab-page]').forEach(btn => btn.addEventListener('click', () => {
+    state.vocabPage += btn.dataset.vocabPage === 'next' ? 1 : -1;
+    render();
+  }));
+  document.querySelectorAll('[data-select-vocab]').forEach(el => el.addEventListener('click', () => {
+    state.selectedVocabId = el.dataset.selectVocab;
+    state.vocabDetailDrawerOpen = window.matchMedia('(max-width: 900px)').matches;
+    render();
+  }));
+  document.querySelectorAll('[data-close-vocab-drawer]').forEach(el => el.addEventListener('click', () => {
+    state.vocabDetailDrawerOpen = false;
     render();
   }));
   document.querySelectorAll('[data-speak-vocab]').forEach(btn => btn.addEventListener('click', e => {
@@ -502,6 +547,12 @@ function attachEvents() {
     const item = state.vocabulary.find(v => v.id === btn.dataset.speakVocab);
     if (item) speakWord(item.word, item.speak_lang || (item.exam_category === 'JLPT' ? 'ja-JP' : 'en-US'));
   }));
+  window.onkeydown = event => {
+    if (event.key === 'Escape' && state.vocabDetailDrawerOpen) {
+      state.vocabDetailDrawerOpen = false;
+      render();
+    }
+  };
 
   const addForm = document.getElementById('addForm');
   if (addForm) addForm.addEventListener('submit', handleAddSubmit);
