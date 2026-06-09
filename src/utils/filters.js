@@ -1,7 +1,24 @@
+export const examFilterConfig = {
+  JLPT: {
+    skills: ['语法 / 文法', '词汇 / Vocabulary', '阅读 / Reading', '听力 / Listening'],
+    levels: ['N5', 'N4', 'N3', 'N2', 'N1']
+  },
+  TOEIC: {
+    skills: ['语法 / 文法', '词汇 / Vocabulary', '阅读 / Reading', '听力 / Listening'],
+    levels: ['Part 1', 'Part 2', 'Part 3', 'Part 4', 'Part 5', 'Part 6', 'Part 7', 'TOEIC 500', 'TOEIC 700']
+  },
+  EJU: {
+    skills: ['记述 / Writing', '读解 / Reading', '听解 / Listening', '听读解 / Listening-Reading'],
+    levels: ['基础', '进阶', '模拟题']
+  },
+  School: {
+    skills: ['课堂作业', '发表', '阅读', '写作'],
+    levels: ['基础', '进阶', '复习']
+  }
+};
+
 export const filterConfig = {
-  exams: ['JLPT', 'TOEIC', 'EJU', 'TOEFL', 'IELTS', 'School'],
-  skills: ['语法 / 文法', '词汇 / Vocabulary', '阅读 / Reading', '听力 / Listening', '写作 / Writing', '口语 / Speaking'],
-  levels: ['N5', 'N4', 'N3', 'N2', 'N1', 'A1', 'A2', 'B1', 'B2', 'C1', 'TOEIC 500', 'TOEIC 700', 'EJU 基础', 'EJU 进阶'],
+  exams: Object.keys(examFilterConfig),
   statuses: ['all', 'unmastered', 'uncertain', 'mastered']
 };
 
@@ -18,6 +35,10 @@ export function getStatusLabel(status) {
 
 export function getStatusColor(status) {
   return statusMeta[status]?.[1] || '';
+}
+
+export function getExamConfig(exam) {
+  return examFilterConfig[exam] || examFilterConfig.JLPT;
 }
 
 export function matchesSearch(item, query, fields = []) {
