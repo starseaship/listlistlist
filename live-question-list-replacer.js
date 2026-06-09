@@ -1,4 +1,5 @@
 import { hasSupabaseConfig, listQuestionsByFilters } from './api.js';
+import { questionMatchesKeyword } from './questionFilters.js';
 
 const state = {
   loaded: false,
@@ -76,19 +77,6 @@ function statusLabel(status) {
     uncertain: '模糊',
     mastered: '已掌握'
   }[status] || status || '未掌握';
-}
-
-function questionMatchesKeyword(question, keyword) {
-  const haystack = [
-    question.question_text,
-    question.ai_explanation,
-    question.my_answer_text,
-    question.source_name,
-    question.chapter,
-    ...(question.error_reason_tags || []),
-    ...(question.target_terms || [])
-  ].join(' ').toLowerCase();
-  return haystack.includes(keyword.toLowerCase());
 }
 
 function questionCard(question) {
