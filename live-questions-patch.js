@@ -15,6 +15,56 @@ function escapeHtml(value = '') {
     .replaceAll("'", '&#039;');
 }
 
+function escapeRegExp(value = '') {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function parseTargetTermsFromText(text = '') {
+  const source = String(text || '');
+  const targetLine = source.match(/対象語[：:]\s*([^\n\r]+)/);
+  if (!targetLine?.[1]) return [];
+  return targetLine[1]
+    .split(/[、,，/／・|｜]+/)
+    .map(term => term.trim())
+    .filter(Boolean);
+}
+
+function normalizeTargetTerms(value, question = {}) {
+  const direct = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value
+          .replace(/^\{/, '')
+          .replace(/\}$/, '')
+          .split(/[、,，/／・|｜]+/)
+      : [];
+
+  const fallback = [
+    ...parseTargetTermsFromText(question.context_text),
+    ...parseTargetTermsFromText(question.ai_explanation)
+  ];
+
+  return [...direct, ...fallback]
+    .map(term => String(term || '').trim())
+    .filter(Boolean)
+    .filter((term, index, terms) => terms.indexOf(term) === index)
+    .sort((a, b) => b.length - a.length);
+}
+
+function highlightText(text = '', targetTerms = []) {
+  const terms = normalizeTargetTerms(targetTerms)
+    .filter(term => String(text).includes(term));
+  if (!terms.length) return escapeHtml(text);
+
+  const pattern = terms.map(escapeRegExp).join('|');
+  const regex = new RegExp(`(${pattern})`, 'g');
+  return escapeHtml(text).replace(regex, '<mark class="target-highlight">$1</mark>');
+}
+
+function renderQuestionText(question) {
+  return highlightText(question.question_text || '', question.target_terms || []);
+}
+
 function normalizeOption(option, index, question) {
   const label = option.original_label || option.label || String.fromCharCode(65 + index);
   const mine = String(question.my_answer_text || '');
@@ -25,6 +75,7 @@ function normalizeOption(option, index, question) {
 function normalizeQuestion(question) {
   return {
     ...question,
+    target_terms: normalizeTargetTerms(question.target_terms, question),
     question_options: (question.question_options || []).map((option, index) => normalizeOption(option, index, question))
   };
 }
@@ -64,7 +115,7 @@ function questionCard(question) {
         <span class="tag teal">${escapeHtml(question.question_type || question.section || '')}</span>
         <span class="tag pink">${escapeHtml(statusLabel(question.status))}</span>
       </div>
-      <h3>${escapeHtml(question.question_text)}</h3>
+      <h3>${renderQuestionText(question)}</h3>
       <div class="compact-options">${options}</div>
       <div class="subline">来自 Supabase · ${escapeHtml((question.error_reason_tags || []).join(' / ') || '未填写')}</div>
       <div class="actions" style="margin-top:12px">
@@ -207,7 +258,7 @@ function renderDetail(question) {
         <span class="tag teal">${escapeHtml(question.question_type || question.section || '')}</span>
         <span class="tag pink">${escapeHtml(statusLabel(question.status))}</span>
       </div>
-      <h2>${escapeHtml(question.question_text)}</h2>
+      <h2>${renderQuestionText(question)}</h2>
       <h3>完整选项</h3>
       <div class="full-options">${options}</div>
       <h3>AI 解析</h3>
@@ -225,6 +276,13 @@ function installStyles() {
   style.textContent = `
     .live-question-panel { margin-top: 18px; }
     .live-question-card { border-color: rgba(121, 179, 174, 0.36); }
+    .target-highlight {
+      background: linear-gradient(180deg, rgba(255, 250, 168, 0.18) 15%, rgba(255, 235, 106, 0.82) 15%, rgba(255, 235, 106, 0.82) 88%, rgba(255, 250, 168, 0.18) 88%);
+      border-radius: 0.28em;
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+      padding: 0 0.12em;
+    }
     .live-detail-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 18px; }
     .live-detail-backdrop { position: absolute; inset: 0; background: rgba(34, 40, 49, 0.42); backdrop-filter: blur(3px); }
     .live-detail-modal { position: relative; width: min(940px, 100%); max-height: min(88vh, 940px); overflow: auto; }
@@ -270,9 +328,29 @@ function injectPanel() {
   hero.insertAdjacentHTML('afterend', latestPanel());
 }
 
+function applyInlineHighlights() {
+  if (!state.questions.length) return;
+  const selectors = [
+    '.result-card h3',
+    '.home-recommended-card h3',
+    '.linked-item-title',
+    '.hero h1',
+    '.panel h2'
+  ].join(',');
+
+  document.querySelectorAll(selectors).forEach(element => {
+    if (element.querySelector('.target-highlight')) return;
+    const text = element.textContent.trim();
+    const question = state.questions.find(item => item.question_text === text);
+    if (!question?.target_terms?.length) return;
+    element.innerHTML = renderQuestionText(question);
+  });
+}
+
 function sync() {
   installStyles();
   injectPanel();
+  applyInlineHighlights();
 }
 
 document.addEventListener('click', event => {
