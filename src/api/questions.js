@@ -9,7 +9,7 @@ async function enrichQuestionsWithTargetTerms(questions = []) {
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from('wrong_questions')
-    .select('id,target_terms,context_text')
+    .select('id,target_terms,context_text,vocabulary_items')
     .in('id', ids);
 
   if (error || !Array.isArray(data)) {
@@ -19,14 +19,13 @@ async function enrichQuestionsWithTargetTerms(questions = []) {
 
   const extrasById = new Map(data.map(row => [row.id, row]));
   return questions.map(question => {
-    const extra = extrasById.get(question.id);
-    const rpcTerms = Array.isArray(question.target_terms) ? question.target_terms : [];
-    const tableTerms = Array.isArray(extra?.target_terms) ? extra.target_terms : [];
+    const extra = extrasById.get(question.id) || {};
 
     return {
       ...question,
-      target_terms: tableTerms.length ? tableTerms : rpcTerms,
-      context_text: question.context_text || extra?.context_text || ''
+      target_terms: extra.target_terms ?? question.target_terms ?? [],
+      vocabulary_items: extra.vocabulary_items ?? question.vocabulary_items ?? [],
+      context_text: question.context_text || extra.context_text || ''
     };
   });
 }
