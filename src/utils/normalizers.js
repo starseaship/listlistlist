@@ -1,4 +1,70 @@
+function asArray(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function collectTermFields(value) {
+  if (!value) return [];
+
+  if (typeof value === 'string') {
+    return value
+      .split(/[、,，\n\t　]+/)
+      .map(item => item.trim())
+      .filter(Boolean);
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap(collectTermFields);
+  }
+
+  if (typeof value === 'object') {
+    return [
+      value.term,
+      value.target,
+      value.target_term,
+      value.targetTerm,
+      value.word,
+      value.text,
+      value.surface,
+      value.reading,
+      value.kana,
+      value.label
+    ].flatMap(collectTermFields);
+  }
+
+  return [];
+}
+
+function normalizeTargetTerms(raw = {}) {
+  const terms = [
+    raw.target_terms,
+    raw.targetTerms,
+    raw.target_term,
+    raw.targetTerm,
+    raw.keywords,
+    raw.keyword,
+    raw.vocabulary_items,
+    raw.vocabularyItems,
+    raw.linked_vocabulary,
+    raw.linkedVocabulary
+  ].flatMap(collectTermFields);
+
+  const seen = new Set();
+  return terms.filter(term => {
+    const key = String(term || '').trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function normalizeQuestion(raw = {}) {
+  const vocabularyItems = Array.isArray(raw.vocabulary_items)
+    ? raw.vocabulary_items
+    : Array.isArray(raw.vocabularyItems)
+      ? raw.vocabularyItems
+      : [];
+
   return {
     id: raw.id,
     exam_category: raw.exam_category || '未分类',
@@ -12,11 +78,11 @@ export function normalizeQuestion(raw = {}) {
     my_answer_text: raw.my_answer_text || '',
     ai_explanation: raw.ai_explanation || '',
     error_reason_tags: Array.isArray(raw.error_reason_tags) ? raw.error_reason_tags : [],
-    target_terms: Array.isArray(raw.target_terms) ? raw.target_terms : [],
+    target_terms: normalizeTargetTerms(raw),
     context_text: raw.context_text || '',
     last_reviewed_at: raw.last_reviewed_at ? new Date(raw.last_reviewed_at).toLocaleDateString() : '未复习',
     question_options: Array.isArray(raw.question_options) ? raw.question_options : Array.isArray(raw.options) ? raw.options : [],
-    vocabulary_items: Array.isArray(raw.vocabulary_items) ? raw.vocabulary_items : []
+    vocabulary_items: vocabularyItems
   };
 }
 
