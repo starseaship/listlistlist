@@ -9,7 +9,7 @@ async function enrichQuestionsWithTargetTerms(questions = []) {
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from('wrong_questions')
-    .select('id,target_terms,context_text,vocabulary_items')
+    .select('id,target_terms,context_text')
     .in('id', ids);
 
   if (error || !Array.isArray(data)) {
@@ -24,7 +24,6 @@ async function enrichQuestionsWithTargetTerms(questions = []) {
     return {
       ...question,
       target_terms: extra.target_terms ?? question.target_terms ?? [],
-      vocabulary_items: extra.vocabulary_items ?? question.vocabulary_items ?? [],
       context_text: question.context_text || extra.context_text || ''
     };
   });
