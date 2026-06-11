@@ -1,54 +1,35 @@
-function asArray(value) {
-  if (!value) return [];
-  return Array.isArray(value) ? value : [value];
+function splitTermString(value) {
+  return String(value || '')
+    .replaceAll('、', ',')
+    .replaceAll('，', ',')
+    .replaceAll('\n', ',')
+    .replaceAll('\t', ',')
+    .replaceAll('　', ',')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
 }
 
-function collectTermFields(value) {
+function collectTargetTerms(value) {
   if (!value) return [];
 
   if (typeof value === 'string') {
-    return value
-      .split(/[、,，\n\t　]+/)
-      .map(item => item.trim())
-      .filter(Boolean);
+    return splitTermString(value);
   }
 
   if (Array.isArray(value)) {
-    return value.flatMap(collectTermFields);
+    return value.flatMap(collectTargetTerms);
   }
 
   if (typeof value === 'object') {
-    return [
-      value.term,
-      value.target,
-      value.target_term,
-      value.targetTerm,
-      value.word,
-      value.text,
-      value.surface,
-      value.reading,
-      value.kana,
-      value.label
-    ].flatMap(collectTermFields);
+    return [value.term, value.word, value.text, value.surface, value.reading]
+      .flatMap(collectTargetTerms);
   }
 
   return [];
 }
 
-function normalizeTargetTerms(raw = {}) {
-  const terms = [
-    raw.target_terms,
-    raw.targetTerms,
-    raw.target_term,
-    raw.targetTerm,
-    raw.keywords,
-    raw.keyword,
-    raw.vocabulary_items,
-    raw.vocabularyItems,
-    raw.linked_vocabulary,
-    raw.linkedVocabulary
-  ].flatMap(collectTermFields);
-
+function uniqueTerms(terms = []) {
   const seen = new Set();
   return terms.filter(term => {
     const key = String(term || '').trim();
@@ -58,12 +39,15 @@ function normalizeTargetTerms(raw = {}) {
   });
 }
 
+function normalizeTargetTerms(raw = {}, vocabularyItems = []) {
+  return uniqueTerms([
+    raw.target_terms,
+    vocabularyItems
+  ].flatMap(collectTargetTerms));
+}
+
 export function normalizeQuestion(raw = {}) {
-  const vocabularyItems = Array.isArray(raw.vocabulary_items)
-    ? raw.vocabulary_items
-    : Array.isArray(raw.vocabularyItems)
-      ? raw.vocabularyItems
-      : [];
+  const vocabularyItems = Array.isArray(raw.vocabulary_items) ? raw.vocabulary_items : [];
 
   return {
     id: raw.id,
@@ -78,7 +62,7 @@ export function normalizeQuestion(raw = {}) {
     my_answer_text: raw.my_answer_text || '',
     ai_explanation: raw.ai_explanation || '',
     error_reason_tags: Array.isArray(raw.error_reason_tags) ? raw.error_reason_tags : [],
-    target_terms: normalizeTargetTerms(raw),
+    target_terms: normalizeTargetTerms(raw, vocabularyItems),
     context_text: raw.context_text || '',
     last_reviewed_at: raw.last_reviewed_at ? new Date(raw.last_reviewed_at).toLocaleDateString() : '未复习',
     question_options: Array.isArray(raw.question_options) ? raw.question_options : Array.isArray(raw.options) ? raw.options : [],
