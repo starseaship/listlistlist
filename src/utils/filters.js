@@ -14,6 +14,10 @@ export const examFilterConfig = {
   School: {
     skills: ['课堂作业', '发表', '阅读', '写作'],
     levels: ['基础', '进阶', '复习']
+  },
+  阅读课: {
+    skills: ['词汇 / Vocabulary', '阅读 / Reading', '课堂作业'],
+    levels: ['Chapter 3', 'Chapter 3.7', '复习']
   }
 };
 
