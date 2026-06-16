@@ -1,12 +1,32 @@
 import { getSupabase } from './supabaseClient.js';
+import { imageVocabulary } from '../data/imageVocabulary.js';
+
+function mergeVocabulary(primary = [], fallback = []) {
+  const seen = new Set();
+  const combined = [];
+
+  for (const item of [...fallback, ...primary]) {
+    const key = `${String(item.word || '').trim().toLowerCase()}::${String(item.reading || '').trim().toLowerCase()}`;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    combined.push(item);
+  }
+
+  return combined;
+}
 
 export async function listVocabulary({ limit = 120 } = {}) {
-  const supabase = getSupabase();
-  const { data, error } = await supabase.functions.invoke('study-api', {
-    body: { action: 'list_vocabulary', payload: { limit } }
-  });
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase.functions.invoke('study-api', {
+      body: { action: 'list_vocabulary', payload: { limit } }
+    });
 
-  if (error) throw error;
-  if (data?.ok === false) throw new Error(data.error || 'list_vocabulary failed');
-  return data?.data ?? data ?? [];
+    if (error) throw error;
+    if (data?.ok === false) throw new Error(data.error || 'list_vocabulary failed');
+    return mergeVocabulary(data?.data ?? data ?? [], imageVocabulary);
+  } catch (error) {
+    if (imageVocabulary.length) return imageVocabulary;
+    throw error;
+  }
 }
