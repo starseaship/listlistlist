@@ -1,6 +1,11 @@
 import { getSupabase } from './supabaseClient.js';
 import { imageVocabulary } from '../data/imageVocabulary.js';
 
+const readingClassVocabulary = imageVocabulary.map(item => ({
+  ...item,
+  exam_category: '阅读课'
+}));
+
 function mergeVocabulary(primary = [], fallback = []) {
   const seen = new Set();
   const combined = [];
@@ -24,9 +29,9 @@ export async function listVocabulary({ limit = 120 } = {}) {
 
     if (error) throw error;
     if (data?.ok === false) throw new Error(data.error || 'list_vocabulary failed');
-    return mergeVocabulary(data?.data ?? data ?? [], imageVocabulary);
+    return mergeVocabulary(data?.data ?? data ?? [], readingClassVocabulary);
   } catch (error) {
-    if (imageVocabulary.length) return imageVocabulary;
+    if (readingClassVocabulary.length) return readingClassVocabulary;
     throw error;
   }
 }
