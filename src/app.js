@@ -26,6 +26,19 @@ const initialFilters = {
 
 const SEARCH_RENDER_DELAY_MS = 160;
 
+function createInitialPracticeState() {
+  return {
+    queue: [],
+    index: 0,
+    optionOrder: [],
+    selectedOptionKey: null,
+    isCorrect: null,
+    answered: 0,
+    correct: 0,
+    completed: false
+  };
+}
+
 const state = {
   page: 'home',
   loading: true,
@@ -42,7 +55,8 @@ const state = {
     status: 'all',
     query: ''
   },
-  vocabPage: 1
+  vocabPage: 1,
+  practice: createInitialPracticeState()
 };
 
 let appRoot = null;
@@ -100,6 +114,7 @@ async function loadInitialData() {
     state.vocabulary = Array.isArray(vocabulary) ? vocabulary.map(normalizeVocabulary) : [];
     state.selectedQuestionId = state.questions[0]?.id ?? null;
     state.selectedVocabId = state.vocabulary[0]?.id ?? null;
+    state.practice = createInitialPracticeState();
   } catch (error) {
     state.error = error;
   } finally {
@@ -123,6 +138,11 @@ async function refreshQuestionsFromFilters() {
 function go(page, patch = {}) {
   state.page = page;
   Object.assign(state, patch);
+
+  if (page === 'review') {
+    startPractice(patch.selectedQuestionId || null);
+  }
+
   render();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -135,7 +155,7 @@ function bindGlobalEvents() {
 }
 
 async function handleClick(event) {
-  const target = event.target.closest('button, article, [data-go], [data-detail], [data-edit], [data-select-vocab]');
+  const target = event.target.closest('button, article, [data-go], [data-detail], [data-edit], [data-select-vocab], [data-practice-answer]');
   if (!target) return;
 
   if (target.matches('[data-reload]')) {
@@ -145,6 +165,22 @@ async function handleClick(event) {
 
   if (target.matches('#homeWordSearchBtn')) {
     runHomeWordSearch();
+    return;
+  }
+
+  if (target.matches('[data-practice-answer]')) {
+    await handlePracticeAnswer(target.dataset.practiceAnswer);
+    return;
+  }
+
+  if (target.matches('[data-practice-next]')) {
+    handlePracticeNext();
+    return;
+  }
+
+  if (target.matches('[data-practice-reset]')) {
+    startPractice();
+    render();
     return;
   }
 
@@ -373,6 +409,94 @@ function handleHomeAction(action) {
     state.filters = { exam: 'TOEIC', skill: '语法 / 文法', level: 'Part 5', status: 'all' };
     go('filter');
   }
+}
+
+function shuffle(items = []) {
+  return [...items].sort(() => Math.random() - 0.5);
+}
+
+function getPracticeableQuestions() {
+  return state.questions.filter(question => question.id && (question.question_options || []).length >= 2);
+}
+
+function getOptionKey(option = {}, index = 0) {
+  return String(option.id || option.original_label || option.label || index);
+}
+
+function findPracticeQuestion() {
+  return state.questions.find(question => question.id === state.selectedQuestionId) || null;
+}
+
+function setPracticeQuestion(questionId) {
+  const question = state.questions.find(item => item.id === questionId) || null;
+  state.selectedQuestionId = question?.id || null;
+  state.practice.optionOrder = shuffle((question?.question_options || []).map((option, index) => getOptionKey(option, index)));
+  state.practice.selectedOptionKey = null;
+  state.practice.isCorrect = null;
+}
+
+function startPractice(preferredQuestionId = null) {
+  const questions = getPracticeableQuestions();
+  const ids = questions.map(question => question.id);
+
+  if (!ids.length) {
+    state.practice = createInitialPracticeState();
+    state.selectedQuestionId = null;
+    return;
+  }
+
+  const preferred = preferredQuestionId && ids.includes(preferredQuestionId) ? preferredQuestionId : null;
+  const queue = preferred
+    ? [preferred, ...shuffle(ids.filter(id => id !== preferred))]
+    : shuffle(ids);
+
+  state.practice = {
+    ...createInitialPracticeState(),
+    queue
+  };
+  setPracticeQuestion(queue[0]);
+}
+
+async function handlePracticeAnswer(optionKey) {
+  const question = findPracticeQuestion();
+  if (!question || state.practice.selectedOptionKey) return;
+
+  const option = (question.question_options || []).find((item, index) => getOptionKey(item, index) === optionKey);
+  if (!option) return;
+
+  const previousStatus = question.status;
+  const isCorrect = Boolean(option.is_correct);
+  const result = isCorrect ? 'correct' : 'wrong';
+  const nextStatus = isCorrect ? 'mastered' : 'unmastered';
+
+  state.practice.selectedOptionKey = optionKey;
+  state.practice.isCorrect = isCorrect;
+  state.practice.answered += 1;
+  state.practice.correct += isCorrect ? 1 : 0;
+  question.status = nextStatus;
+  question.last_reviewed_at = '刚刚';
+  render();
+
+  try {
+    await markQuestionReviewed(question.id, result, nextStatus);
+    showToast(isCorrect ? '答对了，已记录' : '答错了，已记录');
+  } catch (error) {
+    question.status = previousStatus;
+    render();
+    showToast(`复习记录失败：${error.message}`);
+  }
+}
+
+function handlePracticeNext() {
+  if (state.practice.index >= state.practice.queue.length - 1) {
+    state.practice.completed = true;
+    render();
+    return;
+  }
+
+  state.practice.index += 1;
+  setPracticeQuestion(state.practice.queue[state.practice.index]);
+  render();
 }
 
 async function handleStatusUpdate(questionId, status) {
