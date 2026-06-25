@@ -7,6 +7,7 @@ export function createInitialPracticeState() {
     optionOrder: [],
     selectedOptionKey: null,
     isCorrect: null,
+    isSaving: false,
     answered: 0,
     correct: 0,
     completed: false
@@ -57,7 +58,8 @@ export function preparePracticeQuestion(practice, questions = [], questionId = n
       ...practice,
       optionOrder: shuffle((question?.question_options || []).map((option, index) => getOptionKey(option, index))),
       selectedOptionKey: null,
-      isCorrect: null
+      isCorrect: null,
+      isSaving: false
     },
     currentQuestionId: question?.id || null
   };
@@ -68,8 +70,16 @@ export function applyPracticeAnswer(practice, optionKey, isCorrect) {
     ...practice,
     selectedOptionKey: optionKey,
     isCorrect,
+    isSaving: true,
     answered: practice.answered + 1,
     correct: practice.correct + (isCorrect ? 1 : 0)
+  };
+}
+
+export function finishPracticeSave(practice) {
+  return {
+    ...practice,
+    isSaving: false
   };
 }
 
@@ -78,6 +88,7 @@ export function rollbackPracticeAnswer(practice, wasCorrect) {
     ...practice,
     selectedOptionKey: null,
     isCorrect: null,
+    isSaving: false,
     answered: Math.max(0, practice.answered - 1),
     correct: Math.max(0, practice.correct - (wasCorrect ? 1 : 0))
   };
