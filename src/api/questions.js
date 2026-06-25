@@ -1,5 +1,4 @@
 import { getSupabase } from './supabaseClient.js';
-import { statusToReviewResult } from '../utils/reviewStatus.js';
 
 function toStudyApiPayload(payload = {}) {
   const { options = [], vocabulary_items = [], vocabulary = [], ...question } = payload;
@@ -67,22 +66,6 @@ export async function listQuestionsByFilters(filters = {}) {
   return Array.isArray(data) ? data : [];
 }
 
-export async function searchRelatedQuestions(keyword, filters = {}) {
-  const supabase = getSupabase();
-  const { data, error } = await supabase.rpc('search_related_questions_rpc', {
-    p_keyword: keyword,
-    p_exam_category: filters.examCategory ?? null,
-    p_level: filters.level ?? null,
-    p_section: filters.section ?? null,
-    p_question_type: filters.questionType ?? null,
-    p_status: filters.status === 'all' ? null : filters.status ?? null,
-    p_limit: filters.limit ?? 80
-  });
-
-  if (error) throw error;
-  return Array.isArray(data) ? data : [];
-}
-
 export async function addQuestion(payload) {
   const supabase = getSupabase();
   const { data, error } = await supabase.functions.invoke('study-api', {
@@ -103,10 +86,6 @@ export async function updateQuestion(questionId, payload) {
   if (error) await throwFunctionError(error);
   if (data?.ok === false) throw new Error(data.error || 'update_question failed');
   return data?.data ?? data;
-}
-
-export async function updateQuestionStatus(questionId, status) {
-  return markQuestionReviewed(questionId, statusToReviewResult(status), status);
 }
 
 export async function markQuestionReviewed(questionId, result = 'reviewed', newStatus = null) {
