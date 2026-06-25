@@ -1,4 +1,5 @@
 import './styles.css';
+import './nav.css';
 import { startApp } from './app.js';
 
 const root = document.getElementById('app');
