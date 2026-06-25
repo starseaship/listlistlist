@@ -2,8 +2,11 @@ import { hasSupabaseConfig } from './api/supabaseClient.js';
 import { addQuestion, listQuestionsByFilters, listVocabulary, markQuestionReviewed, updateQuestion } from './api/index.js';
 import { AppShell } from './components/AppShell.js';
 import { AddPage, DetailPage, EditPage, ErrorPage, FilterPage, HomePage, LoadingPage, QuestionsPage, ReviewPage, VocabPage } from './components/Pages.js';
+import { advancePractice, applyPracticeAnswer, buildPracticeSession, createInitialPracticeState, finishPracticeSave, rollbackPracticeAnswer } from './controllers/practiceController.js';
 import { getExamConfig } from './utils/filters.js';
 import { normalizeQuestion, normalizeVocabulary } from './utils/normalizers.js';
+import { DISPLAY_LABELS, getOptionKey } from './utils/questionOptions.js';
+import { answerToReviewUpdate, statusToReviewResult } from './utils/reviewStatus.js';
 import { speakWord } from './speech.js';
 
 const pageRenderers = {
@@ -25,27 +28,17 @@ const initialFilters = {
 };
 
 const SEARCH_RENDER_DELAY_MS = 160;
-
-function createInitialPracticeState() {
-  return {
-    queue: [],
-    index: 0,
-    optionOrder: [],
-    selectedOptionKey: null,
-    isCorrect: null,
-    answered: 0,
-    correct: 0,
-    completed: false
-  };
-}
+const DETAIL_SOURCE_PAGES = ['questions', 'filter', 'vocab', 'review'];
 
 const state = {
   page: 'home',
   loading: true,
   error: null,
   questions: [],
+  filterResults: null,
   vocabulary: [],
   selectedQuestionId: null,
+  practiceQuestionId: null,
   selectedVocabId: null,
   lastListPage: 'questions',
   search: '',
@@ -111,8 +104,10 @@ async function loadInitialData() {
     ]);
 
     state.questions = Array.isArray(questions) ? questions.map(normalizeQuestion) : [];
+    state.filterResults = null;
     state.vocabulary = Array.isArray(vocabulary) ? vocabulary.map(normalizeVocabulary) : [];
     state.selectedQuestionId = state.questions[0]?.id ?? null;
+    state.practiceQuestionId = null;
     state.selectedVocabId = state.vocabulary[0]?.id ?? null;
     state.practice = createInitialPracticeState();
   } catch (error) {
@@ -131,15 +126,19 @@ async function refreshQuestionsFromFilters() {
     limit: 120
   });
 
-  state.questions = Array.isArray(data) ? data.map(normalizeQuestion) : [];
-  state.selectedQuestionId = state.questions[0]?.id ?? null;
+  state.filterResults = Array.isArray(data) ? data.map(normalizeQuestion) : [];
+  state.selectedQuestionId = state.filterResults[0]?.id ?? state.selectedQuestionId;
+}
+
+function resetRemoteFilterResults() {
+  state.filterResults = null;
 }
 
 function go(page, patch = {}) {
   state.page = page;
   Object.assign(state, patch);
 
-  if (page === 'review') {
+  if (page === 'review' && (!state.practice.queue.length || patch.selectedQuestionId)) {
     startPractice(patch.selectedQuestionId || null);
   }
 
@@ -190,7 +189,8 @@ async function handleClick(event) {
   }
 
   if (target.matches('[data-detail]')) {
-    go('detail', { selectedQuestionId: target.dataset.detail, lastListPage: state.lastListPage || 'questions' });
+    const listPage = DETAIL_SOURCE_PAGES.includes(state.page) ? state.page : state.lastListPage || 'questions';
+    go('detail', { selectedQuestionId: target.dataset.detail, lastListPage: listPage });
     return;
   }
 
@@ -204,35 +204,34 @@ async function handleClick(event) {
     return;
   }
 
-  if (target.matches('[data-home-action]')) {
-    handleHomeAction(target.dataset.homeAction);
-    return;
-  }
-
   if (target.matches('[data-filter-exam]')) {
     const exam = target.dataset.filterExam;
     const config = getExamConfig(exam);
     state.filters.exam = exam;
     state.filters.skill = config.skills[0];
     state.filters.level = config.levels[0];
+    resetRemoteFilterResults();
     render();
     return;
   }
 
   if (target.matches('[data-filter-skill]')) {
     state.filters.skill = target.dataset.filterSkill;
+    resetRemoteFilterResults();
     render();
     return;
   }
 
   if (target.matches('[data-filter-level]')) {
     state.filters.level = target.dataset.filterLevel;
+    resetRemoteFilterResults();
     render();
     return;
   }
 
   if (target.matches('[data-filter-status]')) {
     state.filters.status = target.dataset.filterStatus;
+    resetRemoteFilterResults();
     render();
     return;
   }
@@ -251,6 +250,7 @@ async function handleClick(event) {
   if (target.matches('[data-reset-filter]')) {
     state.filters = { ...initialFilters };
     state.search = '';
+    resetRemoteFilterResults();
     render();
     return;
   }
@@ -330,10 +330,9 @@ function splitTags(value) {
 }
 
 function buildQuestionPayload(form, baseQuestion = {}) {
-  const labels = ['A', 'B', 'C', 'D'];
   const correct = form.get('correct_label');
   const mine = form.get('my_label');
-  const options = labels.map(label => ({
+  const options = DISPLAY_LABELS.map(label => ({
     label,
     option_text: String(form.get(`option_${label}`) || '').trim(),
     is_correct: label === correct,
@@ -392,110 +391,56 @@ async function handleSubmit(event) {
   }
 }
 
-function handleHomeAction(action) {
-  if (action === 'unmastered-review') {
-    const target = state.questions.find(question => question.status === 'unmastered') || state.questions[0];
-    if (target) go('review', { selectedQuestionId: target.id });
-    return;
-  }
-
-  if (action === 'jlpt-grammar') {
-    state.filters = { exam: 'JLPT', skill: '语法 / 文法', level: 'N3', status: 'all' };
-    go('filter');
-    return;
-  }
-
-  if (action === 'toeic-part5') {
-    state.filters = { exam: 'TOEIC', skill: '语法 / 文法', level: 'Part 5', status: 'all' };
-    go('filter');
-  }
-}
-
-function shuffle(items = []) {
-  return [...items].sort(() => Math.random() - 0.5);
-}
-
-function getPracticeableQuestions() {
-  return state.questions.filter(question => question.id && (question.question_options || []).length >= 2);
-}
-
-function getOptionKey(option = {}, index = 0) {
-  return String(option.id || option.original_label || option.label || index);
+function startPractice(preferredQuestionId = null) {
+  const { practice, currentQuestionId } = buildPracticeSession(state.questions, preferredQuestionId);
+  state.practice = practice;
+  state.practiceQuestionId = currentQuestionId;
 }
 
 function findPracticeQuestion() {
-  return state.questions.find(question => question.id === state.selectedQuestionId) || null;
-}
-
-function setPracticeQuestion(questionId) {
-  const question = state.questions.find(item => item.id === questionId) || null;
-  state.selectedQuestionId = question?.id || null;
-  state.practice.optionOrder = shuffle((question?.question_options || []).map((option, index) => getOptionKey(option, index)));
-  state.practice.selectedOptionKey = null;
-  state.practice.isCorrect = null;
-}
-
-function startPractice(preferredQuestionId = null) {
-  const questions = getPracticeableQuestions();
-  const ids = questions.map(question => question.id);
-
-  if (!ids.length) {
-    state.practice = createInitialPracticeState();
-    state.selectedQuestionId = null;
-    return;
-  }
-
-  const preferred = preferredQuestionId && ids.includes(preferredQuestionId) ? preferredQuestionId : null;
-  const queue = preferred
-    ? [preferred, ...shuffle(ids.filter(id => id !== preferred))]
-    : shuffle(ids);
-
-  state.practice = {
-    ...createInitialPracticeState(),
-    queue
-  };
-  setPracticeQuestion(queue[0]);
+  return state.questions.find(question => question.id === state.practiceQuestionId) || null;
 }
 
 async function handlePracticeAnswer(optionKey) {
   const question = findPracticeQuestion();
-  if (!question || state.practice.selectedOptionKey) return;
+  if (!question || state.practice.selectedOptionKey || state.practice.isSaving) return;
 
   const option = (question.question_options || []).find((item, index) => getOptionKey(item, index) === optionKey);
   if (!option) return;
 
   const previousStatus = question.status;
+  const previousReviewedAt = question.last_reviewed_at;
   const isCorrect = Boolean(option.is_correct);
-  const result = isCorrect ? 'correct' : 'wrong';
-  const nextStatus = isCorrect ? 'mastered' : 'unmastered';
+  const { result, status } = answerToReviewUpdate(isCorrect);
 
-  state.practice.selectedOptionKey = optionKey;
-  state.practice.isCorrect = isCorrect;
-  state.practice.answered += 1;
-  state.practice.correct += isCorrect ? 1 : 0;
-  question.status = nextStatus;
+  state.practice = applyPracticeAnswer(state.practice, optionKey, isCorrect);
+  question.status = status;
   question.last_reviewed_at = '刚刚';
   render();
 
   try {
-    await markQuestionReviewed(question.id, result, nextStatus);
+    await markQuestionReviewed(question.id, result, status);
+    state.practice = finishPracticeSave(state.practice);
+    render();
     showToast(isCorrect ? '答对了，已记录' : '答错了，已记录');
   } catch (error) {
+    state.practice = rollbackPracticeAnswer(state.practice, isCorrect);
     question.status = previousStatus;
+    question.last_reviewed_at = previousReviewedAt;
     render();
     showToast(`复习记录失败：${error.message}`);
   }
 }
 
 function handlePracticeNext() {
-  if (state.practice.index >= state.practice.queue.length - 1) {
-    state.practice.completed = true;
-    render();
+  if (state.practice.isSaving) {
+    showToast('正在保存复习记录');
     return;
   }
 
-  state.practice.index += 1;
-  setPracticeQuestion(state.practice.queue[state.practice.index]);
+  const { practice, currentQuestionId } = advancePractice(state.practice, state.questions);
+  state.practice = practice;
+  state.practiceQuestionId = currentQuestionId;
   render();
 }
 
@@ -506,8 +451,7 @@ async function handleStatusUpdate(questionId, status) {
   render();
 
   try {
-    const result = status === 'mastered' ? 'correct' : status === 'uncertain' ? 'uncertain' : 'wrong';
-    await markQuestionReviewed(questionId, result, status);
+    await markQuestionReviewed(questionId, statusToReviewResult(status), status);
     showToast('复习状态已保存');
   } catch (error) {
     if (question && previousStatus) question.status = previousStatus;
