@@ -54,6 +54,7 @@ export function ReviewPage(state) {
     `;
   }).join('');
 
+  const nextLabel = practice.isSaving ? '保存中...' : practice.index >= practice.queue.length - 1 ? '完成本轮' : '下一题';
   const feedback = answered ? `
     <div class="explain">
       <strong>${practice.isCorrect ? '答对了。' : '答错了。'}</strong>
@@ -61,8 +62,8 @@ export function ReviewPage(state) {
       ${question.ai_explanation ? `<br><br>${escapeHtml(question.ai_explanation)}` : ''}
     </div>
     <div class="actions compact-actions">
-      <button class="btn compact" type="button" data-practice-next>${practice.index >= practice.queue.length - 1 ? '完成本轮' : '下一题'}</button>
-      <button class="btn soft compact" type="button" data-detail="${escapeAttr(question.id)}">查看详情</button>
+      <button class="btn compact" type="button" data-practice-next ${practice.isSaving ? 'disabled' : ''}>${nextLabel}</button>
+      <button class="btn soft compact" type="button" data-detail="${escapeAttr(question.id)}" ${practice.isSaving ? 'disabled' : ''}>查看详情</button>
     </div>
   ` : '<div class="subline">选择一个答案后，会立即显示正确答案并记录复习结果。</div>';
 
