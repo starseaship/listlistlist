@@ -15,21 +15,6 @@ export function AppShell(state, content) {
   const [title, subtitle] = titleMap[state.page] || titleMap.home;
 
   return `
-    <style>
-      @media (max-width: 900px) {
-        .bottom-nav {
-          grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-          gap: 4px !important;
-          padding: 6px !important;
-        }
-        .bottom-nav button {
-          min-width: 0 !important;
-          white-space: nowrap !important;
-          padding: 8px 2px !important;
-          font-size: 12px !important;
-        }
-      }
-    </style>
     <div class="topbar">
       <div class="topbar-inner">
         <button class="brand" type="button" data-go="home">
