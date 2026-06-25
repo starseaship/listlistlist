@@ -4,6 +4,8 @@ import { highlightText } from '../utils/highlight.js';
 import { QuestionCard, QuestionDetail, StatusTag } from './QuestionCard.js';
 import { VocabCard, VocabDetail } from './VocabCard.js';
 
+const FORM_LABELS = ['A', 'B', 'C', 'D'];
+
 function buttonGroup(items, active, dataName, formatter = item => item) {
   return items.map(item => `
     <button class="chip ${active === item ? 'active' : ''}" type="button" data-${dataName}="${escapeAttr(item)}">
@@ -16,19 +18,36 @@ function selectOptions(items, active) {
   return items.map(item => `<option value="${escapeAttr(item)}" ${active === item ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('');
 }
 
+function formLabelForOption(option = {}, index = 0) {
+  const rawLabel = String(option.label || option.original_label || '').trim().toUpperCase();
+  if (FORM_LABELS.includes(rawLabel)) return rawLabel;
+
+  const numericIndex = Number(rawLabel) - 1;
+  if (Number.isInteger(numericIndex) && FORM_LABELS[numericIndex]) return FORM_LABELS[numericIndex];
+
+  return FORM_LABELS[index] || rawLabel || '';
+}
+
+function optionForFormLabel(question, label) {
+  const options = question?.question_options || [];
+  const byLabel = options.find((item, index) => formLabelForOption(item, index) === label);
+  return byLabel || options[FORM_LABELS.indexOf(label)] || null;
+}
+
 function optionValue(question, label) {
-  const option = (question?.question_options || []).find(item => (item.label || item.original_label) === label);
-  return option?.option_text || '';
+  return optionForFormLabel(question, label)?.option_text || '';
 }
 
 function correctLabel(question) {
-  const option = (question?.question_options || []).find(item => item.is_correct);
-  return option?.label || option?.original_label || 'A';
+  const options = question?.question_options || [];
+  const index = options.findIndex(item => item.is_correct);
+  return index >= 0 ? formLabelForOption(options[index], index) : 'A';
 }
 
 function myLabel(question) {
-  const option = (question?.question_options || []).find(item => item.is_my_answer);
-  return option?.label || option?.original_label || '';
+  const options = question?.question_options || [];
+  const index = options.findIndex(item => item.is_my_answer);
+  return index >= 0 ? formLabelForOption(options[index], index) : '';
 }
 
 function questionMatches(question, keyword) {
@@ -55,9 +74,9 @@ function QuestionForm({ question = null, mode = 'add' } = {}) {
         <div class="form-field"><label>题型标签</label><input class="input" name="question_type" value="${escapeAttr(question?.question_type || '')}" placeholder="例：漢字書き選択 / Part 5"></div>
         <div class="form-field full-span"><label>来源</label><input class="input" name="source_name" value="${escapeAttr(question?.source_name || '')}" placeholder="教材 / 模拟题 / 课堂"></div>
         <div class="form-field full-span"><label>题目</label><textarea class="textarea" name="question_text" placeholder="输入题目文本" required>${escapeHtml(question?.question_text || '')}</textarea></div>
-        ${['A', 'B', 'C', 'D'].map(label => `<div class="form-field"><label>选项 ${label}</label><input class="input" name="option_${label}" value="${escapeAttr(optionValue(question, label))}" placeholder="${label}. 选项内容"></div>`).join('')}
-        <div class="form-field"><label>正确答案</label><select class="select" name="correct_label">${selectOptions(['A', 'B', 'C', 'D'], correctLabel(question))}</select></div>
-        <div class="form-field"><label>我的答案</label><select class="select" name="my_label"><option value="">未填写</option>${selectOptions(['A', 'B', 'C', 'D'], myLabel(question))}</select></div>
+        ${FORM_LABELS.map(label => `<div class="form-field"><label>选项 ${label}</label><input class="input" name="option_${label}" value="${escapeAttr(optionValue(question, label))}" placeholder="${label}. 选项内容"></div>`).join('')}
+        <div class="form-field"><label>正确答案</label><select class="select" name="correct_label">${selectOptions(FORM_LABELS, correctLabel(question))}</select></div>
+        <div class="form-field"><label>我的答案</label><select class="select" name="my_label"><option value="">未填写</option>${selectOptions(FORM_LABELS, myLabel(question))}</select></div>
         <div class="form-field full-span"><label>解析</label><textarea class="textarea" name="ai_explanation" placeholder="AI 解析或自己的错因记录">${escapeHtml(question?.ai_explanation || '')}</textarea></div>
         <div class="form-field full-span"><label>错因标签</label><input class="input" name="error_reason_tags" value="${escapeAttr(tags)}" placeholder="用逗号分隔，例如 词义辨析, 接续判断"></div>
         <div class="form-field full-span form-actions">
