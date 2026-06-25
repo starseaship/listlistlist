@@ -121,6 +121,7 @@ async function loadInitialData() {
 async function refreshQuestionsFromFilters() {
   const data = await listQuestionsByFilters({
     examCategory: state.filters.exam,
+    skillGroup: state.filters.skill,
     level: state.filters.level,
     status: state.filters.status,
     limit: 120
@@ -150,7 +151,6 @@ function bindGlobalEvents() {
   document.addEventListener('click', handleClick);
   document.addEventListener('input', handleInput);
   document.addEventListener('submit', handleSubmit);
-  document.addEventListener('keydown', handleKeyDown);
 }
 
 async function handleClick(event) {
@@ -159,11 +159,6 @@ async function handleClick(event) {
 
   if (target.matches('[data-reload]')) {
     await loadInitialData();
-    return;
-  }
-
-  if (target.matches('#homeWordSearchBtn')) {
-    runHomeWordSearch();
     return;
   }
 
@@ -303,21 +298,6 @@ function handleInput(event) {
     state.vocabPage = 1;
     scheduleSearchRender();
   }
-}
-
-function handleKeyDown(event) {
-  if (event.key !== 'Enter') return;
-  if (!event.target.matches('#homeWordSearch')) return;
-  runHomeWordSearch();
-}
-
-function runHomeWordSearch() {
-  const input = document.getElementById('homeWordSearch');
-  const keyword = input?.value.trim();
-  if (!keyword) return;
-
-  state.search = keyword;
-  go('questions');
 }
 
 function splitTags(value) {
