@@ -3,8 +3,9 @@ import { escapeHtml } from '../utils/html.js';
 const titleMap = {
   home: ['错题本', '真实 Supabase 数据'],
   questions: ['错题列表', '按题复习'],
-  filter: ['标签筛选', '按考试、题型和状态查找'],
+  filter: ['标签筛选', '按考试、能力和状态查找'],
   detail: ['错题详情', '完整选项和解析'],
+  edit: ['编辑错题', '修改并保存'],
   vocab: ['生词本', '按词复习'],
   add: ['新增错题', '写入 Supabase'],
   review: ['闪卡复习', '随机选项练习']
@@ -32,7 +33,7 @@ export function AppShell(state, content) {
     <main class="app">${content}</main>
     <nav class="bottom-nav" aria-label="主要导航">
       <button type="button" class="${state.page === 'home' ? 'active' : ''}" data-go="home">首页</button>
-      <button type="button" class="${state.page === 'questions' || state.page === 'filter' ? 'active' : ''}" data-go="questions">错题</button>
+      <button type="button" class="${state.page === 'questions' || state.page === 'filter' || state.page === 'detail' || state.page === 'edit' ? 'active' : ''}" data-go="questions">错题</button>
       <button type="button" class="${state.page === 'vocab' ? 'active' : ''}" data-go="vocab">生词</button>
       <button type="button" class="${state.page === 'add' ? 'active' : ''}" data-go="add">新增</button>
     </nav>
