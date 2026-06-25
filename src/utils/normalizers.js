@@ -90,6 +90,7 @@ export function normalizeQuestion(raw = {}) {
     error_reason_tags: Array.isArray(raw.error_reason_tags) ? raw.error_reason_tags : [],
     target_terms: normalizeTargetTerms(raw, vocabularyItems),
     context_text: raw.context_text || '',
+    source_method: raw.source_method || 'manual',
     last_reviewed_at: raw.last_reviewed_at ? new Date(raw.last_reviewed_at).toLocaleDateString() : '未复习',
     question_options: rawOptions.map((option, index) => normalizeOption(option, index, myAnswerText)),
     vocabulary_items: vocabularyItems
