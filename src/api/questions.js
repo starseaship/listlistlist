@@ -1,4 +1,5 @@
 import { getSupabase } from './supabaseClient.js';
+import { statusToReviewResult } from '../utils/reviewStatus.js';
 
 function toStudyApiPayload(payload = {}) {
   const { options = [], vocabulary_items = [], vocabulary = [], ...question } = payload;
@@ -29,12 +30,6 @@ function toStudyApiPayload(payload = {}) {
     })),
     vocabulary: vocabulary.length ? vocabulary : vocabulary_items
   };
-}
-
-function getReviewResultFromStatus(status) {
-  if (status === 'mastered') return 'correct';
-  if (status === 'uncertain') return 'uncertain';
-  return 'wrong';
 }
 
 async function throwFunctionError(error) {
@@ -111,7 +106,7 @@ export async function updateQuestion(questionId, payload) {
 }
 
 export async function updateQuestionStatus(questionId, status) {
-  return markQuestionReviewed(questionId, getReviewResultFromStatus(status), status);
+  return markQuestionReviewed(questionId, statusToReviewResult(status), status);
 }
 
 export async function markQuestionReviewed(questionId, result = 'reviewed', newStatus = null) {
