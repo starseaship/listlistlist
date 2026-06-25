@@ -1,22 +1,11 @@
 import { escapeAttr, escapeHtml, nl2br } from '../utils/html.js';
 import { getQuestionSkill, getStatusColor, getStatusLabel } from '../utils/filters.js';
 import { highlightText } from '../utils/highlight.js';
-
-const DISPLAY_LABELS = ['A', 'B', 'C', 'D'];
+import { getOptionDisplayLabel } from '../utils/questionOptions.js';
 
 export function StatusTag(status) {
   const color = getStatusColor(status);
   return `<span class="tag ${escapeAttr(color)}">${escapeHtml(getStatusLabel(status))}</span>`;
-}
-
-function optionLabel(option = {}, index = 0) {
-  const rawLabel = String(option.label || option.original_label || '').trim().toUpperCase();
-  if (DISPLAY_LABELS.includes(rawLabel)) return rawLabel;
-
-  const numericIndex = Number(rawLabel) - 1;
-  if (Number.isInteger(numericIndex) && DISPLAY_LABELS[numericIndex]) return DISPLAY_LABELS[numericIndex];
-
-  return DISPLAY_LABELS[index] || rawLabel || String.fromCharCode(65 + index);
 }
 
 function SkillTag(question) {
@@ -31,7 +20,7 @@ function TypeTag(question) {
 export function QuestionCard(question) {
   const options = (question.question_options || [])
     .map((option, index) => {
-      const label = optionLabel(option, index);
+      const label = getOptionDisplayLabel(option, index);
       return `<span class="option-chip">${escapeHtml(label)}. ${escapeHtml(option.option_text || '')}</span>`;
     })
     .join('');
@@ -64,7 +53,7 @@ export function QuestionDetail(question, lastListPage = 'questions') {
 
   const options = (question.question_options || [])
     .map((option, index) => {
-      const label = optionLabel(option, index);
+      const label = getOptionDisplayLabel(option, index);
       const cls = option.is_correct ? 'correct' : option.is_my_answer ? 'mine' : '';
       const note = option.is_correct ? ' 正确答案' : option.is_my_answer ? ' 我的答案' : '';
       return `<div class="option ${escapeAttr(cls)}">${escapeHtml(label)}. ${escapeHtml(option.option_text || '')}<strong>${escapeHtml(note)}</strong></div>`;
