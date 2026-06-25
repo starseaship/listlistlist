@@ -4,8 +4,6 @@ import { highlightText } from '../utils/highlight.js';
 import { QuestionCard, QuestionDetail, StatusTag } from './QuestionCard.js';
 import { VocabCard, VocabDetail } from './VocabCard.js';
 
-const FORM_LABELS = ['A', 'B', 'C', 'D'];
-
 function buttonGroup(items, active, dataName, formatter = item => item) {
   return items.map(item => `
     <button class="chip ${active === item ? 'active' : ''}" type="button" data-${dataName}="${escapeAttr(item)}">
@@ -18,41 +16,28 @@ function selectOptions(items, active) {
   return items.map(item => `<option value="${escapeAttr(item)}" ${active === item ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('');
 }
 
-function formLabelForOption(option = {}, index = 0) {
-  const rawLabel = String(option.label || option.original_label || '').trim().toUpperCase();
-  if (FORM_LABELS.includes(rawLabel)) return rawLabel;
-
-  const numericIndex = Number(rawLabel) - 1;
-  if (Number.isInteger(numericIndex) && FORM_LABELS[numericIndex]) return FORM_LABELS[numericIndex];
-
-  return FORM_LABELS[index] || rawLabel || '';
-}
-
-function optionForFormLabel(question, label) {
-  const options = question?.question_options || [];
-  const byLabel = options.find((item, index) => formLabelForOption(item, index) === label);
-  return byLabel || options[FORM_LABELS.indexOf(label)] || null;
-}
-
 function optionValue(question, label) {
-  return optionForFormLabel(question, label)?.option_text || '';
+  const option = (question?.question_options || []).find(item => (item.label || item.original_label) === label);
+  return option?.option_text || '';
 }
 
 function correctLabel(question) {
-  const options = question?.question_options || [];
-  const index = options.findIndex(item => item.is_correct);
-  return index >= 0 ? formLabelForOption(options[index], index) : 'A';
+  const option = (question?.question_options || []).find(item => item.is_correct);
+  return option?.label || option?.original_label || 'A';
 }
 
 function myLabel(question) {
-  const options = question?.question_options || [];
-  const index = options.findIndex(item => item.is_my_answer);
-  return index >= 0 ? formLabelForOption(options[index], index) : '';
+  const option = (question?.question_options || []).find(item => item.is_my_answer);
+  return option?.label || option?.original_label || '';
 }
 
 function questionMatches(question, keyword) {
   return matchesSearch(question, keyword, ['question_text', 'ai_explanation', 'my_answer_text', 'source_name', 'chapter', 'section', 'question_type']) ||
     (question.error_reason_tags || []).some(tag => String(tag).toLowerCase().includes(String(keyword || '').toLowerCase()));
+}
+
+function optionKey(option = {}, index = 0) {
+  return String(option.id || option.original_label || option.label || index);
 }
 
 function QuestionForm({ question = null, mode = 'add' } = {}) {
@@ -74,9 +59,9 @@ function QuestionForm({ question = null, mode = 'add' } = {}) {
         <div class="form-field"><label>题型标签</label><input class="input" name="question_type" value="${escapeAttr(question?.question_type || '')}" placeholder="例：漢字書き選択 / Part 5"></div>
         <div class="form-field full-span"><label>来源</label><input class="input" name="source_name" value="${escapeAttr(question?.source_name || '')}" placeholder="教材 / 模拟题 / 课堂"></div>
         <div class="form-field full-span"><label>题目</label><textarea class="textarea" name="question_text" placeholder="输入题目文本" required>${escapeHtml(question?.question_text || '')}</textarea></div>
-        ${FORM_LABELS.map(label => `<div class="form-field"><label>选项 ${label}</label><input class="input" name="option_${label}" value="${escapeAttr(optionValue(question, label))}" placeholder="${label}. 选项内容"></div>`).join('')}
-        <div class="form-field"><label>正确答案</label><select class="select" name="correct_label">${selectOptions(FORM_LABELS, correctLabel(question))}</select></div>
-        <div class="form-field"><label>我的答案</label><select class="select" name="my_label"><option value="">未填写</option>${selectOptions(FORM_LABELS, myLabel(question))}</select></div>
+        ${['A', 'B', 'C', 'D'].map(label => `<div class="form-field"><label>选项 ${label}</label><input class="input" name="option_${label}" value="${escapeAttr(optionValue(question, label))}" placeholder="${label}. 选项内容"></div>`).join('')}
+        <div class="form-field"><label>正确答案</label><select class="select" name="correct_label">${selectOptions(['A', 'B', 'C', 'D'], correctLabel(question))}</select></div>
+        <div class="form-field"><label>我的答案</label><select class="select" name="my_label"><option value="">未填写</option>${selectOptions(['A', 'B', 'C', 'D'], myLabel(question))}</select></div>
         <div class="form-field full-span"><label>解析</label><textarea class="textarea" name="ai_explanation" placeholder="AI 解析或自己的错因记录">${escapeHtml(question?.ai_explanation || '')}</textarea></div>
         <div class="form-field full-span"><label>错因标签</label><input class="input" name="error_reason_tags" value="${escapeAttr(tags)}" placeholder="用逗号分隔，例如 词义辨析, 接续判断"></div>
         <div class="form-field full-span form-actions">
@@ -116,6 +101,7 @@ export function HomePage(state) {
       <p>真实数据来自 Supabase。列表页不提前暴露答案，详情页再看解析。</p>
       <div class="quick-grid home-quick-grid">
         <article class="quick-card" data-go="questions"><strong>查看错题本</strong><span>按题复习，先看普通选项。</span></article>
+        <article class="quick-card" data-go="review"><strong>开始刷题</strong><span>随机抽题，点击选项后立刻判断对错。</span></article>
         <article class="quick-card" data-go="filter"><strong>标签筛选</strong><span>按考试、能力分类、题型和状态过滤。</span></article>
       </div>
     </section>
@@ -123,7 +109,7 @@ export function HomePage(state) {
     <section class="panel recommended-panel compact-recommended-panel">
       <div class="section-head">
         <div><h2>建议复习</h2><p>优先展示当前读取到的前 3 道错题。</p></div>
-        <button class="btn secondary compact" type="button" data-go="review">开始复习</button>
+        <button class="btn secondary compact" type="button" data-go="review">开始刷题</button>
       </div>
       <div class="home-recommended-list">
         ${recommended.map(question => QuestionCard(question)).join('') || '<div class="empty-note">暂无错题数据。</div>'}
@@ -247,20 +233,90 @@ export function AddPage() {
 }
 
 export function ReviewPage(state) {
+  const practice = state.practice || {};
+  const availableCount = state.questions.filter(question => (question.question_options || []).length >= 2).length;
+
+  if (!availableCount) {
+    return `
+      <section class="panel hero center-panel">
+        <h1>暂无可刷题目</h1>
+        <p>至少需要一道含 2 个以上选项的错题。</p>
+        <div class="actions"><button class="btn" type="button" data-go="add">新增错题</button></div>
+      </section>
+    `;
+  }
+
+  if (practice.completed) {
+    const accuracy = practice.answered ? Math.round((practice.correct / practice.answered) * 100) : 0;
+    return `
+      <section class="panel hero center-panel">
+        <h1>本轮刷题完成</h1>
+        <p>答题 ${practice.answered} 道，正确 ${practice.correct} 道，正确率 ${accuracy}%。</p>
+        <div class="actions">
+          <button class="btn" type="button" data-practice-reset>再刷一轮</button>
+          <button class="btn soft" type="button" data-go="questions">回错题列表</button>
+        </div>
+      </section>
+    `;
+  }
+
   const question = state.questions.find(item => item.id === state.selectedQuestionId) || state.questions[0];
   if (!question) {
     return '<section class="panel"><div class="empty-note">暂无可复习错题。</div></section>';
   }
 
-  const shuffled = [...(question.question_options || [])].sort(() => Math.random() - 0.5);
+  const options = question.question_options || [];
+  const orderedKeys = practice.optionOrder?.length ? practice.optionOrder : options.map(optionKey);
+  const orderedOptions = orderedKeys
+    .map(key => {
+      const option = options.find((item, index) => optionKey(item, index) === key);
+      return option ? { key, option } : null;
+    })
+    .filter(Boolean);
+  const answered = Boolean(practice.selectedOptionKey);
+  const correctOption = options.find(option => option.is_correct);
+  const correctLabel = correctOption ? (correctOption.label || correctOption.original_label || '') : '';
+  const progress = `${Math.min((practice.index || 0) + 1, practice.queue?.length || 1)} / ${practice.queue?.length || availableCount}`;
+
+  const optionButtons = orderedOptions.map(({ key, option }, index) => {
+    const displayLabel = option.label || option.original_label || String.fromCharCode(65 + index);
+    const isSelected = practice.selectedOptionKey === key;
+    const cls = answered && option.is_correct ? 'correct' : answered && isSelected ? 'mine' : '';
+    const suffix = answered && option.is_correct ? ' 正确答案' : answered && isSelected && !option.is_correct ? ' 我的答案' : '';
+    return `
+      <button class="option ${escapeAttr(cls)}" style="width:100%;text-align:left;cursor:${answered ? 'default' : 'pointer'}" type="button" data-practice-answer="${escapeAttr(key)}" ${answered ? 'disabled' : ''}>
+        ${escapeHtml(displayLabel)}. ${escapeHtml(option.option_text || '')}<strong>${escapeHtml(suffix)}</strong>
+      </button>
+    `;
+  }).join('');
+
+  const feedback = answered ? `
+    <div class="explain">
+      <strong>${practice.isCorrect ? '答对了。' : '答错了。'}</strong>
+      ${correctOption ? `<br>正确答案：${escapeHtml(correctLabel)}. ${escapeHtml(correctOption.option_text || '')}` : ''}
+      ${question.ai_explanation ? `<br><br>${escapeHtml(question.ai_explanation)}` : ''}
+    </div>
+    <div class="actions compact-actions">
+      <button class="btn compact" type="button" data-practice-next>${practice.index >= practice.queue.length - 1 ? '完成本轮' : '下一题'}</button>
+      <button class="btn soft compact" type="button" data-detail="${escapeAttr(question.id)}">查看详情</button>
+    </div>
+  ` : '<div class="subline">选择一个答案后，会立即显示正确答案并记录复习结果。</div>';
 
   return `
-    <section class="panel hero compact-hero"><h1>闪卡复习</h1><p>选项随机排列，点击详情再看答案。</p></section>
+    <section class="panel hero compact-hero">
+      <h1>刷题练习</h1>
+      <p>随机抽题，点击选项后立刻判断对错。</p>
+      <div class="pills">
+        <span class="pill">进度：${escapeHtml(progress)}</span>
+        <span class="pill">已答：${practice.answered || 0}</span>
+        <span class="pill">正确：${practice.correct || 0}</span>
+      </div>
+    </section>
     <section class="panel detail-panel">
       <div class="meta-tags"><span class="tag">${escapeHtml(question.exam_category)}</span>${question.level ? `<span class="tag lavender">${escapeHtml(question.level)}</span>` : ''}<span class="tag teal">${escapeHtml(getQuestionSkill(question))}</span>${StatusTag(question.status)}</div>
       <h2>${highlightText(question.question_text, question.target_terms)}</h2>
-      <div class="full-options">${shuffled.map((option, index) => `<div class="option">${String.fromCharCode(65 + index)}. ${escapeHtml(option.option_text || '')}</div>`).join('')}</div>
-      <div class="actions compact-actions"><button class="btn secondary compact" type="button" data-detail="${escapeAttr(question.id)}">看答案和解析</button><button class="btn compact" type="button" data-go="review">再随机一次</button></div>
+      <div class="full-options">${optionButtons}</div>
+      ${feedback}
     </section>
   `;
 }
