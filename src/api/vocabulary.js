@@ -10,7 +10,7 @@ function mergeVocabulary(primary = [], fallback = []) {
   const seen = new Set();
   const combined = [];
 
-  for (const item of [...fallback, ...primary]) {
+  for (const item of [...primary, ...fallback]) {
     const key = `${String(item.word || '').trim().toLowerCase()}::${String(item.reading || '').trim().toLowerCase()}`;
     if (!key || seen.has(key)) continue;
     seen.add(key);
